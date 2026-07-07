@@ -1,0 +1,77 @@
+{
+	"pages": [
+		{
+			"path": "pages/login/login",
+			"style": {
+				"navigationBarTitleText": "爱在浙里",
+				"navigationStyle": "custom"
+			}
+		},
+		{
+			"path": "pages/home/home",
+			"style": {
+				"navigationBarTitleText": "爱在浙里"
+			}
+		},
+		{
+			"path": "pages/countdown/countdown",
+			"style": {
+				"navigationBarTitleText": "倒数日"
+			}
+		},
+		{
+			"path": "pages/mine/mine",
+			"style": {
+				"navigationBarTitleText": "我的"
+			}
+		},
+		{
+			"path": "pages/fortune/fortune",
+			"style": {
+				"navigationBarTitleText": "AI 恋爱占卜"
+			}
+		},
+		{
+			"path": "pages/match/match",
+			"style": {
+				"navigationBarTitleText": "匹配度测试"
+			}
+		},
+		{
+			"path": "pages/tasks/tasks",
+			"style": {
+				"navigationBarTitleText": "每日任务"
+			}
+		},
+		{
+			"path": "pages/companion/companion",
+			"style": {
+				"navigationBarTitleText": "AI 陪伴"
+			}
+		},
+		{
+			"path": "pages/pet/pet",
+			"style": {
+				"navigationBarTitleText": "我们的幼崽"
+			}
+		},
+		{
+			"path": "pages/memories/memories",
+			"style": {
+				"navigationBarTitleText": "纪念本"
+			}
+		},
+		{
+			"path": "pages/house/house",
+			"style": {
+				"navigationBarTitleText": "我们的小屋"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "white",
+		"navigationBarTitleText": "爱在浙里",
+		"navigationBarBackgroundColor": "#ff6b81",
+		"backgroundColor": "#fbf7f4"
+	}
+}

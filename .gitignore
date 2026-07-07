@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+*/node_modules/
+
+# 编译产物（本地 build 后的 H5，不纳入仓库）
+frontend/dist/
+
+# 环境变量（含密钥，绝不上传）
+.env
+server/.env
+
+# 本地数据（SQLite / PGlite 临时文件）
+server/data/
+
+# 测试脚本（仅开发用）
+server/*test*.mjs
+server/*online*.mjs
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
