@@ -1,7 +1,7 @@
 <template>
 	<view class="page">
 		<view class="hero">
-			<text class="logo">💗</text>
+			<image class="logo" src="/static/logo.png" mode="aspectFit"></image>
 			<text class="app-name">爱在浙大</text>
 			<text class="slogan">浙大情侣专属 · 把心动好好收藏</text>
 		</view>
@@ -96,7 +96,12 @@ export default {
 	padding-top: 180rpx;
 	padding-bottom: 60rpx;
 }
-.logo { font-size: 96rpx; }
+.logo {
+	width: 148rpx;
+	height: 148rpx;
+	border-radius: 36rpx;
+	box-shadow: 0 18rpx 46rpx rgba(17, 72, 127, 0.22);
+}
 .app-name {
 	font-size: 56rpx;
 	color: #fff;
