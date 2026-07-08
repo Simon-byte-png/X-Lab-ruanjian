@@ -7,6 +7,8 @@ frontend/dist/
 
 # 环境变量（含密钥，绝不上传）
 .env
+frontend/.env*
+!frontend/.env.example
 server/.env
 
 # 本地数据（SQLite / PGlite 临时文件）

@@ -1,15 +1,23 @@
 // 统一请求封装
 // H5(网页/预览)：接口地址相对当前页面推导，兼容 /preview/<会话>/<端口>/ 子路径，避免硬编码
 // 小程序/App：需指向已部署的后端域名(上线后填写)
+function normalizeApiBase(base) {
+	const value = (base || '').trim()
+	if (!value) {
+		console.warn('VITE_API_BASE_URL 未配置，小程序/App 端请求地址为空')
+		return ''
+	}
+	return value.endsWith('/') ? value : value + '/'
+}
+
 function apiBase() {
 	// #ifdef H5
 	// 以当前页面地址为基准解析出 .../api/，无论部署在根目录还是子路径都成立
 	return new URL('api/', window.location.href).href
 	// #endif
 	// #ifndef H5
-	// 小程序/App 后端地址。当前指向已部署的线上后端(可在微信开发者工具"不校验合法域名"下直接联调看效果)。
-	// 正式发布小程序时，请换成你自己的、已备案的 https 域名(见 WECHAT.md)。
-	return 'http://3250105888-love-in-zju.apps.zaowuyun.com/api/'
+	// 小程序/App 正式包请通过 VITE_API_BASE_URL 注入已备案的 https 后端地址。
+	return normalizeApiBase(import.meta.env.VITE_API_BASE_URL)
 	// #endif
 }
 

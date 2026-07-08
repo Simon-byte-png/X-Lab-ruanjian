@@ -3,6 +3,28 @@
 uni-app 一套代码已能编译出微信小程序。产物在 `frontend/dist/build/mp-weixin/`。
 但小程序**不能**直接用网页预览那套地址，必须先有一个 **https 的后端域名**。下面按顺序做即可。
 
+## 当前项目状态
+
+我已经把小程序构建准备好：
+
+- 普通调试包：`cd frontend && npm run build:mp-weixin`
+- 正式上线前检查 + 打包：`cd frontend && npm run build:mp-weixin:prod`
+- 小程序接口地址改成从 `VITE_API_BASE_URL` 读取，示例见 `frontend/.env.example`
+
+现在还不能直接提交审核，差两个外部信息：
+
+- 微信小程序 AppID：填到 `frontend/src/manifest.json` 的 `mp-weixin.appid`
+- 已备案、证书正常的 HTTPS 后端域名：填到 `frontend/.env.production` 的 `VITE_API_BASE_URL`
+
+当前临时后端 `http://3250105888-love-in-zju.apps.zaowuyun.com/api/` 可以在开发者工具里勾选“不校验合法域名”后联调。调试时可临时执行：
+
+```bash
+cd frontend
+VITE_API_BASE_URL=http://3250105888-love-in-zju.apps.zaowuyun.com/api/ npm run build:mp-weixin
+```
+
+但它不是正式小程序可用地址；它的 HTTPS 证书和域名不匹配，不能拿去提交审核。
+
 ---
 
 ## 前置：小程序对后端的硬性要求
@@ -26,18 +48,17 @@ uni-app 一套代码已能编译出微信小程序。产物在 `frontend/dist/bu
 
 ## 步骤 2：把后端地址填进前端
 
-编辑 `frontend/src/utils/request.js`，找到 **非 H5 分支**（`#ifndef H5`）：
+复制示例环境变量文件：
 
-```js
-// #ifndef H5
-return 'https://REPLACE_WITH_DEPLOYED_DOMAIN/api/'
-// #endif
+```bash
+cd frontend
+cp .env.example .env.production
 ```
 
-把它改成你的真实地址，例如：
+把 `.env.production` 改成你的真实地址，例如：
 
-```js
-return 'https://your-domain.com/api/'
+```env
+VITE_API_BASE_URL=https://your-domain.com/api/
 ```
 
 （H5 分支不用动，网页版会自动按当前地址推导。）
@@ -61,7 +82,7 @@ return 'https://your-domain.com/api/'
 
 ```bash
 npm install        # 若还没装依赖
-npm run build:mp-weixin
+npm run build:mp-weixin:prod
 ```
 
 产物输出到 `frontend/dist/build/mp-weixin/`。
