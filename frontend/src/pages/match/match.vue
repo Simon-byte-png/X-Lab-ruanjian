@@ -33,7 +33,7 @@
 			<view class="notice" v-else-if="stage === 'waiting'">
 				<text class="n-emoji">⏳</text>
 				<text class="n-title">你已答完，等 TA 完成</text>
-				<text class="n-sub">催 TA 打开「爱在浙里」也做一遍这套题吧</text>
+				<text class="n-sub">催 TA 打开「爱在浙大」也做一遍这套题吧</text>
 				<button class="prim" :loading="polling" @click="checkResult">刷新看看</button>
 				<button class="ghost" @click="retake">重新作答</button>
 			</view>

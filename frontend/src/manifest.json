@@ -1,5 +1,5 @@
 {
-    "name" : "爱在浙里",
+    "name" : "爱在浙大",
     "appid" : "wx88cf436411747930",
     "description" : "浙大情侣专属的恋爱集成应用",
     "versionName" : "1.0.0",
@@ -24,7 +24,7 @@
     },
     "quickapp" : {},
     "h5" : {
-        "title" : "爱在浙里",
+        "title" : "爱在浙大",
         "router" : {
             "mode" : "hash",
             "base" : "./"

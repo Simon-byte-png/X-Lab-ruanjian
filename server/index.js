@@ -254,7 +254,7 @@ app.post('/api/ai/fortune', auth, async (req, res) => {
 			if (cached.rows.length) return res.json({ ...JSON.parse(cached.rows[0].payload), cached: true })
 			const status = req.user.couple_id ? '恋爱中' : '单身'
 			const nick = req.user.nickname || req.user.username
-			const sys = '你是「爱在浙里」App 里一位温柔又俏皮的恋爱占卜师，为浙江大学的年轻人写今日恋爱运势。语气温暖、积极、有画面感，绝不迷信恐吓。'
+			const sys = '你是「爱在浙大」App 里一位温柔又俏皮的恋爱占卜师，为浙江大学的年轻人写今日恋爱运势。语气温暖、积极、有画面感，绝不迷信恐吓。'
 			const data = await chatJSON(sys,
 				`为昵称「${nick}」、当前状态「${status}」的用户写一份今日恋爱运势。返回 JSON：{"score": 0到100的整数, "mood": "今日心情签(不超过16字)", "love": "今日恋爱运势(不超过60字)", "luckyAction": "今天适合做的一件恋爱小事(不超过20字)", "luckyPlace": "浙大校园里的幸运地点(不超过12字)", "advice": "一句暖心建议(不超过30字)"}`,
 				{ maxTokens: 600 })
@@ -379,7 +379,7 @@ async function generateDailyTasks(user) {
 	]
 	try {
 		const arr = await chatJSON(
-			'你是「爱在浙里」的恋爱任务官，为浙大的情侣设计今天可完成的小任务，温暖有趣、门槛低、能增进感情，可适当结合校园或日常场景。',
+			'你是「爱在浙大」的恋爱任务官，为浙大的情侣设计今天可完成的小任务，温暖有趣、门槛低、能增进感情，可适当结合校园或日常场景。',
 			`为情侣「${me}」和「${ta}」生成今天的 3 个恋爱小任务。要求：一个偏"一起做一件事"，一个偏"表达心意"，一个偏"小惊喜或记录"。返回 JSON 数组，每个元素：{"emoji":"一个emoji", "title":"任务名(不超过12字)", "detail":"具体怎么做(不超过45字)"}。只返回数组。`,
 			{ maxTokens: 700 })
 		const list = Array.isArray(arr) ? arr : (arr.tasks || arr.list || [])

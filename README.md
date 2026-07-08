@@ -1,4 +1,4 @@
-# 爱在浙里 · Love in ZJU
+# 爱在浙大 · Love in ZJU
 
 浙大情侣恋爱集成 App —— uni-app (H5 + 微信小程序) + Express/PostgreSQL 全栈项目。
 
@@ -150,7 +150,7 @@ zaodeploy deploy --project love-in-zju --start "node server/index.js" --db postg
 ```bash
 git init
 git add .
-git commit -m "init: 爱在浙里全栈项目"
+git commit -m "init: 爱在浙大全栈项目"
 git remote add origin https://github.com/<你的用户名>/love-in-zju.git
 git push -u origin main
 ```

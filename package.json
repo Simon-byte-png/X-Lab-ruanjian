@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "爱在浙里 · 浙大情侣恋爱集成 app（全栈）",
+  "description": "爱在浙大 · 浙大情侣恋爱集成 app（全栈）",
   "scripts": {
     "build": "cd frontend && npm install && npm run build:h5",
     "start": "node server/index.js"

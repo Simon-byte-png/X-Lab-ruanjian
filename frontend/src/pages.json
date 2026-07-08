@@ -3,14 +3,14 @@
 		{
 			"path": "pages/login/login",
 			"style": {
-				"navigationBarTitleText": "爱在浙里",
+				"navigationBarTitleText": "爱在浙大",
 				"navigationStyle": "custom"
 			}
 		},
 		{
 			"path": "pages/home/home",
 			"style": {
-				"navigationBarTitleText": "爱在浙里"
+				"navigationBarTitleText": "爱在浙大"
 			}
 		},
 		{
@@ -70,7 +70,7 @@
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "white",
-		"navigationBarTitleText": "爱在浙里",
+		"navigationBarTitleText": "爱在浙大",
 		"navigationBarBackgroundColor": "#ff6b81",
 		"backgroundColor": "#fbf7f4"
 	}

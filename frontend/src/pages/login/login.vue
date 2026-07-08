@@ -2,7 +2,7 @@
 	<view class="page">
 		<view class="hero">
 			<text class="logo">💗</text>
-			<text class="app-name">爱在浙里</text>
+			<text class="app-name">爱在浙大</text>
 			<text class="slogan">浙大情侣专属 · 把心动好好收藏</text>
 		</view>
 
