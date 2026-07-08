@@ -11,7 +11,7 @@ import { chatJSON, aiAvailable, conversation, chat } from './ai.js'
 import { QUIZZES, getQuiz } from './quizzes.js'
 import { PRESETS, getPreset, MODES, levelInfo, buildSystem } from './companions.js'
 import { ACTIONS, applyDecay, applyAction, petView, levelOf, stageOf } from './pets.js'
-import { uploadImage, storageAvailable } from './storage.js'
+import { uploadImage } from './storage.js'
 import { SHOP, THEMES, getItem } from './house.js'
 
 loadEnv()
@@ -22,6 +22,9 @@ app.use(express.json())
 
 const JWT_SECRET = process.env.JWT_SECRET || 'love-in-zju-dev-secret-change-me'
 const H5_DIR = path.join(__dirname, '../frontend/dist/build/h5')
+const UPLOAD_DIR = path.join(__dirname, 'uploads')
+
+app.use('/uploads', express.static(UPLOAD_DIR))
 
 // ---------- 工具 ----------
 function sign(uid) {
@@ -41,6 +44,43 @@ function genCode() {
 	let s = ''
 	for (let i = 0; i < 6; i++) s += alphabet[bytes[i] % alphabet.length]
 	return s
+}
+function stableNumber(seed, min, max) {
+	const hex = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 8)
+	const n = parseInt(hex, 16)
+	return min + (n % (max - min + 1))
+}
+function pickStable(list, seed) {
+	return list[stableNumber(seed, 0, list.length - 1)]
+}
+function fallbackDailyFortune(user, day) {
+	const seed = `${user.id}:${day}:daily`
+	const mood = pickStable(['心动微醺', '晴天来信', '温柔满格', '慢慢靠近', '甜度上升'], seed + ':mood')
+	return {
+		score: stableNumber(seed + ':score', 72, 96),
+		mood,
+		love: pickStable([
+			'今天适合把小心思说出口，一句自然的关心会让关系更近一点。',
+			'你的吸引力藏在细节里，认真听对方说话会比刻意表现更加分。',
+			'今天的恋爱节奏宜慢不宜急，给彼此一点舒服的回应就很好。',
+			'适合制造一个轻轻的小惊喜，让普通日子多一点被记住的理由。'
+		], seed + ':love'),
+		luckyAction: pickStable(['发一条语音', '一起散步', '认真夸 TA', '约杯奶茶', '分享晚霞'], seed + ':action'),
+		luckyPlace: pickStable(['紫金港', '小剧场', '情人坡', '图书馆', '启真湖'], seed + ':place'),
+		advice: pickStable(['别憋着喜欢，温柔一点表达。', '今天多一点耐心，少一点猜测。', '把期待说清楚，关系会轻松很多。', '认真回应，比浪漫套路更有用。'], seed + ':advice'),
+		fallback: true
+	}
+}
+function fallbackNameMatch(nameA, nameB) {
+	const seed = `${nameA}:${nameB}:match`
+	const score = stableNumber(seed + ':score', 68, 98)
+	return {
+		score,
+		title: pickStable(['慢热高甜型', '默契养成中', '心动同步率高', '互补发光型', '细水长流型'], seed + ':title'),
+		analysis: `${nameA} 和 ${nameB} 的缘分值是 ${score}。你们的节奏不一定完全一样，但容易在日常细节里慢慢靠近，越坦诚越合拍。`,
+		tip: pickStable(['找个时间一起吃顿饭。', '多问一句“你怎么想”。', '把喜欢落到具体行动里。', '少猜，多说清楚。'], seed + ':tip'),
+		fallback: true
+	}
 }
 function publicUser(u) {
 	if (!u) return null
@@ -255,9 +295,15 @@ app.post('/api/ai/fortune', auth, async (req, res) => {
 			const status = req.user.couple_id ? '恋爱中' : '单身'
 			const nick = req.user.nickname || req.user.username
 			const sys = '你是「爱在浙大」App 里一位温柔又俏皮的恋爱占卜师，为浙江大学的年轻人写今日恋爱运势。语气温暖、积极、有画面感，绝不迷信恐吓。'
-			const data = await chatJSON(sys,
-				`为昵称「${nick}」、当前状态「${status}」的用户写一份今日恋爱运势。返回 JSON：{"score": 0到100的整数, "mood": "今日心情签(不超过16字)", "love": "今日恋爱运势(不超过60字)", "luckyAction": "今天适合做的一件恋爱小事(不超过20字)", "luckyPlace": "浙大校园里的幸运地点(不超过12字)", "advice": "一句暖心建议(不超过30字)"}`,
-				{ maxTokens: 600 })
+			let data
+			try {
+				data = await chatJSON(sys,
+					`为昵称「${nick}」、当前状态「${status}」的用户写一份今日恋爱运势。返回 JSON：{"score": 0到100的整数, "mood": "今日心情签(不超过16字)", "love": "今日恋爱运势(不超过60字)", "luckyAction": "今天适合做的一件恋爱小事(不超过20字)", "luckyPlace": "浙大校园里的幸运地点(不超过12字)", "advice": "一句暖心建议(不超过30字)"}`,
+					{ maxTokens: 600 })
+			} catch (e) {
+				console.warn('[fortune daily] ai fail, use fallback:', e.message)
+				data = fallbackDailyFortune(req.user, day)
+			}
 			const payload = JSON.stringify(data)
 			await query('INSERT INTO ai_fortunes (user_id, kind, day, payload) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id, kind, day) DO UPDATE SET payload=EXCLUDED.payload', [req.user.id, 'daily', day, payload])
 			return res.json({ ...data, cached: false })
@@ -266,9 +312,15 @@ app.post('/api/ai/fortune', auth, async (req, res) => {
 			const nameB = String(req.body.nameB || '').trim().slice(0, 20)
 			if (!nameA || !nameB) return res.status(400).json({ error: '请填写两个名字' })
 			const sys = '你是趣味恋爱占卜师，做「姓名缘分测算」，风格积极正向、有趣浪漫，仅供娱乐。'
-			const data = await chatJSON(sys,
-				`测算「${nameA}」和「${nameB}」之间的缘分。返回 JSON：{"score": 0到100的整数, "title": "缘分标题(不超过12字)", "analysis": "缘分解读(不超过80字)", "tip": "给他们的小建议(不超过30字)"}`,
-				{ maxTokens: 500 })
+			let data
+			try {
+				data = await chatJSON(sys,
+					`测算「${nameA}」和「${nameB}」之间的缘分。返回 JSON：{"score": 0到100的整数, "title": "缘分标题(不超过12字)", "analysis": "缘分解读(不超过80字)", "tip": "给他们的小建议(不超过30字)"}`,
+					{ maxTokens: 500 })
+			} catch (e) {
+				console.warn('[fortune match] ai fail, use fallback:', e.message)
+				data = fallbackNameMatch(nameA, nameB)
+			}
 			return res.json(data)
 		}
 	} catch (e) {
@@ -647,7 +699,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 app.post('/api/upload', auth, upload.single('file'), async (req, res) => {
 	try {
 		if (!req.file) return res.status(400).json({ error: '没有收到文件' })
-		if (!storageAvailable()) return res.status(503).json({ error: '图片存储暂不可用' })
 		const url = await uploadImage(req.file.buffer, req.file.mimetype)
 		res.json({ url })
 	} catch (e) {

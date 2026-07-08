@@ -1,6 +1,12 @@
-// 对象存储上传（S3 兼容 / 腾讯云 COS）。读平台注入的 $S3_* / $AWS_*。
+// 对象存储上传（S3 兼容 / 腾讯云 COS）。未配置对象存储时，回退到本地 uploads 目录。
 import crypto from 'node:crypto'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const LOCAL_UPLOAD_DIR = path.join(__dirname, 'uploads')
 
 function cfg() {
 	return {
@@ -34,9 +40,17 @@ function getClient(c) {
 
 const EXT = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' }
 
+async function uploadLocal(buffer, contentType) {
+	const ext = EXT[contentType] || 'jpg'
+	const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`
+	await fs.mkdir(LOCAL_UPLOAD_DIR, { recursive: true })
+	await fs.writeFile(path.join(LOCAL_UPLOAD_DIR, filename), buffer)
+	return `/uploads/${filename}`
+}
+
 export async function uploadImage(buffer, contentType) {
 	const c = cfg()
-	if (!storageAvailable()) throw new Error('对象存储未配置')
+	if (!storageAvailable()) return uploadLocal(buffer, contentType)
 	const ext = EXT[contentType] || 'jpg'
 	const key = `${c.prefix}love-in-zju/uploads/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`
 	await getClient(c).send(new PutObjectCommand({

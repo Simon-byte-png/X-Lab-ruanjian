@@ -13,6 +13,7 @@ server/.env
 
 # 本地数据（SQLite / PGlite 临时文件）
 server/data/
+server/uploads/
 
 # 测试脚本（仅开发用）
 server/*test*.mjs

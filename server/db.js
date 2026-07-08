@@ -23,7 +23,9 @@ export async function initDb() {
 		driver = 'postgres'
 	} else {
 		const { PGlite } = await import('@electric-sql/pglite')
-		const dataDir = path.join(__dirname, 'data', 'pgdata')
+		const dataDir = process.env.PGLITE_DATA_DIR
+			? path.resolve(process.env.PGLITE_DATA_DIR)
+			: path.join(__dirname, 'data', 'pgdata')
 		fs.mkdirSync(dataDir, { recursive: true })
 		const db = new PGlite(dataDir)
 		await db.waitReady
