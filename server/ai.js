@@ -1,23 +1,42 @@
 // AI 调用封装：兼容两种网关，按顺序尝试，谁通用谁。
 //  1) OpenAI 兼容网关：$OPENAI_BASE_URL + $OPENAI_API_KEY（zaodeploy 部署/预览环境注入，线上首选）
 //  2) Anthropic 网关：$ANTHROPIC_BASE_URL + $ANTHROPIC_AUTH_TOKEN（本地开发自测兜底）
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5'
+// 注意：模型名必须在「请求时」读取，而不是模块加载时。
+// 因为 ES import 会先于 index.js 里的 loadEnv() 执行，模块级常量会拿到空的 process.env，
+// 导致本地 .env 里的 OPENAI_MODEL/ANTHROPIC_MODEL 读不到而回退默认值。
+function openaiModel() { return process.env.OPENAI_MODEL || 'gpt-4o-mini' }
+function anthropicModel() { return process.env.ANTHROPIC_MODEL || 'claude-sonnet-5' }
 
 function hasOpenAI() { return !!process.env.OPENAI_API_KEY }
 function hasAnthropic() { return !!(process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY) }
 
 export function aiAvailable() { return hasOpenAI() || hasAnthropic() }
 
+// AI 请求超时（毫秒）：避免网关无响应时前端无限等待。可用 AI_TIMEOUT_MS 覆盖。
+const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 45000
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = AI_TIMEOUT_MS) {
+	const controller = new AbortController()
+	const timer = setTimeout(() => controller.abort(), timeoutMs)
+	try {
+		return await fetch(url, { ...options, signal: controller.signal })
+	} catch (e) {
+		if (e.name === 'AbortError') throw new Error(`AI 请求超时（>${Math.round(timeoutMs / 1000)}s）`)
+		throw e
+	} finally {
+		clearTimeout(timer)
+	}
+}
+
 async function openaiChat(system, userText, { maxTokens = 700 } = {}) {
 	const base = process.env.OPENAI_BASE_URL.replace(/\/$/, '')
 	const key = process.env.OPENAI_API_KEY
 	const url = /\/v\d+$/.test(base) ? base + '/chat/completions' : base + '/v1/chat/completions'
-	const res = await fetch(url, {
+	const res = await fetchWithTimeout(url, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
 		body: JSON.stringify({
-			model: OPENAI_MODEL,
+			model: openaiModel(),
 			max_tokens: maxTokens,
 			messages: [{ role: 'system', content: system }, { role: 'user', content: userText }]
 		})
@@ -32,7 +51,7 @@ async function openaiChat(system, userText, { maxTokens = 700 } = {}) {
 async function anthropicChat(system, userText, { maxTokens = 700 } = {}) {
 	const base = (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/$/, '')
 	const token = process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY
-	const res = await fetch(base + '/v1/messages', {
+	const res = await fetchWithTimeout(base + '/v1/messages', {
 		method: 'POST',
 		headers: {
 			'content-type': 'application/json',
@@ -40,7 +59,7 @@ async function anthropicChat(system, userText, { maxTokens = 700 } = {}) {
 			'authorization': 'Bearer ' + token,
 			'anthropic-version': '2023-06-01'
 		},
-		body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: userText }] })
+		body: JSON.stringify({ model: anthropicModel(), max_tokens: maxTokens, system, messages: [{ role: 'user', content: userText }] })
 	})
 	if (!res.ok) throw new Error('anthropic ' + res.status + ' ' + (await res.text().catch(() => '')).slice(0, 160))
 	const data = await res.json()
@@ -54,10 +73,10 @@ async function openaiConversation(system, messages, { maxTokens = 500 } = {}) {
 	const base = process.env.OPENAI_BASE_URL.replace(/\/$/, '')
 	const key = process.env.OPENAI_API_KEY
 	const url = /\/v\d+$/.test(base) ? base + '/chat/completions' : base + '/v1/chat/completions'
-	const res = await fetch(url, {
+	const res = await fetchWithTimeout(url, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
-		body: JSON.stringify({ model: OPENAI_MODEL, max_tokens: maxTokens, messages: [{ role: 'system', content: system }, ...messages] })
+		body: JSON.stringify({ model: openaiModel(), max_tokens: maxTokens, messages: [{ role: 'system', content: system }, ...messages] })
 	})
 	if (!res.ok) throw new Error('openai ' + res.status + ' ' + (await res.text().catch(() => '')).slice(0, 160))
 	const data = await res.json()
@@ -72,10 +91,10 @@ async function anthropicConversation(system, messages, { maxTokens = 500 } = {})
 	// Anthropic 要求首条为 user，去掉开头的 assistant 消息
 	let msgs = messages.slice()
 	while (msgs.length && msgs[0].role !== 'user') msgs.shift()
-	const res = await fetch(base + '/v1/messages', {
+	const res = await fetchWithTimeout(base + '/v1/messages', {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', 'x-api-key': token, 'authorization': 'Bearer ' + token, 'anthropic-version': '2023-06-01' },
-		body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: maxTokens, system, messages: msgs })
+		body: JSON.stringify({ model: anthropicModel(), max_tokens: maxTokens, system, messages: msgs })
 	})
 	if (!res.ok) throw new Error('anthropic ' + res.status + ' ' + (await res.text().catch(() => '')).slice(0, 160))
 	const data = await res.json()
@@ -112,7 +131,7 @@ export async function chat(system, userText, opts = {}) {
 
 // 强制模型只输出 JSON，并容错解析
 export async function chatJSON(system, userText, opts = {}) {
-	const raw = await chat(system + '\n\n只输出合法 JSON，不要任何解释、不要 markdown 代码块。', userText, opts)
+	const raw = await chat(system + '\n\n只输出合法 JSON，不要任何解释、不要 markdown 代码块。确保 JSON 字符串值中的换行和引号使用 \\n 和 \\" 转义。', userText, opts)
 	let s = raw.trim()
 	if (s.startsWith('```')) s = s.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '').trim()
 	// 兼容对象 {} 与数组 []：取最外层，谁先出现用谁
@@ -125,5 +144,19 @@ export async function chatJSON(system, userText, opts = {}) {
 		const b = s.lastIndexOf('}')
 		if (oi !== -1 && b !== -1) s = s.slice(oi, b + 1)
 	}
-	return JSON.parse(s)
+	try {
+		return JSON.parse(s)
+	} catch (e1) {
+		// 容错 1：修复字符串值中未转义的换行
+		let fixed = s.replace(/(?<=:\s*")([^"]*?)\n([^"]*?)(?=")/g, '$1\\n$2')
+		try { return JSON.parse(fixed) } catch (e2) {
+			// 容错 2：移除尾随逗号
+			fixed = fixed.replace(/,(\s*[}\]])/g, '$1')
+			try { return JSON.parse(fixed) } catch (e3) {
+				console.warn('[ai] chatJSON parse failed, raw:', raw.slice(0, 300))
+				console.warn('[ai] extracted:', s.slice(0, 300))
+				throw new Error('AI 返回格式异常，请重试')
+			}
+		}
+	}
 }

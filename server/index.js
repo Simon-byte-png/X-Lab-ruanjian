@@ -20,6 +20,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 app.use(express.json())
 
+// H5 跨域：前端 dev 端口与后端 dev 端口不同（5173 vs 3000）时，浏览器会拦 CORS。
+app.use((req, res, next) => {
+	const origin = req.headers.origin
+	// 开发/本地体验允许任意来源；线上如需收紧可改成白名单。
+	res.setHeader('Access-Control-Allow-Origin', origin || '*')
+	res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+	res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+	res.setHeader('Access-Control-Allow-Credentials', 'true')
+	if (req.method === 'OPTIONS') return res.sendStatus(204)
+	next()
+})
+
 const JWT_SECRET = process.env.JWT_SECRET || 'love-in-zju-dev-secret-change-me'
 const H5_DIR = path.join(__dirname, '../frontend/dist/build/h5')
 const UPLOAD_DIR = path.join(__dirname, 'uploads')
@@ -44,43 +56,6 @@ function genCode() {
 	let s = ''
 	for (let i = 0; i < 6; i++) s += alphabet[bytes[i] % alphabet.length]
 	return s
-}
-function stableNumber(seed, min, max) {
-	const hex = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 8)
-	const n = parseInt(hex, 16)
-	return min + (n % (max - min + 1))
-}
-function pickStable(list, seed) {
-	return list[stableNumber(seed, 0, list.length - 1)]
-}
-function fallbackDailyFortune(user, day) {
-	const seed = `${user.id}:${day}:daily`
-	const mood = pickStable(['心动微醺', '晴天来信', '温柔满格', '慢慢靠近', '甜度上升'], seed + ':mood')
-	return {
-		score: stableNumber(seed + ':score', 72, 96),
-		mood,
-		love: pickStable([
-			'今天适合把小心思说出口，一句自然的关心会让关系更近一点。',
-			'你的吸引力藏在细节里，认真听对方说话会比刻意表现更加分。',
-			'今天的恋爱节奏宜慢不宜急，给彼此一点舒服的回应就很好。',
-			'适合制造一个轻轻的小惊喜，让普通日子多一点被记住的理由。'
-		], seed + ':love'),
-		luckyAction: pickStable(['发一条语音', '一起散步', '认真夸 TA', '约杯奶茶', '分享晚霞'], seed + ':action'),
-		luckyPlace: pickStable(['紫金港', '小剧场', '情人坡', '图书馆', '启真湖'], seed + ':place'),
-		advice: pickStable(['别憋着喜欢，温柔一点表达。', '今天多一点耐心，少一点猜测。', '把期待说清楚，关系会轻松很多。', '认真回应，比浪漫套路更有用。'], seed + ':advice'),
-		fallback: true
-	}
-}
-function fallbackNameMatch(nameA, nameB) {
-	const seed = `${nameA}:${nameB}:match`
-	const score = stableNumber(seed + ':score', 68, 98)
-	return {
-		score,
-		title: pickStable(['慢热高甜型', '默契养成中', '心动同步率高', '互补发光型', '细水长流型'], seed + ':title'),
-		analysis: `${nameA} 和 ${nameB} 的缘分值是 ${score}。你们的节奏不一定完全一样，但容易在日常细节里慢慢靠近，越坦诚越合拍。`,
-		tip: pickStable(['找个时间一起吃顿饭。', '多问一句“你怎么想”。', '把喜欢落到具体行动里。', '少猜，多说清楚。'], seed + ':tip'),
-		fallback: true
-	}
 }
 function publicUser(u) {
 	if (!u) return null
@@ -116,7 +91,7 @@ app.post('/api/auth/register', async (req, res) => {
 		const username = String(req.body.username || '').trim()
 		const password = String(req.body.password || '')
 		const nickname = String(req.body.nickname || '').trim() || username
-		if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) return res.status(400).json({ error: '账号需3-20位字母/数字/下划线' })
+		if (username.length < 2 || username.length > 20) return res.status(400).json({ error: '账号需2-20个字符' })
 		if (password.length < 6) return res.status(400).json({ error: '密码至少6位' })
 		const exist = await query('SELECT id FROM users WHERE username = $1', [username])
 		if (exist.rows.length) return res.status(400).json({ error: '该账号已被注册' })
@@ -282,50 +257,337 @@ app.delete('/api/countdowns/:id', auth, async (req, res) => {
 	res.json({ ok: true })
 })
 
-// ---------- AI 算命 ----------
+// ---------- AI 算命（生辰八字）----------
 app.get('/api/ai/status', (req, res) => res.json({ available: aiAvailable() }))
 
-app.post('/api/ai/fortune', auth, async (req, res) => {
+function validateBirth(b) {
+	if (!b || typeof b !== 'object') return '请填写完整的出生信息'
+	const y = Number.parseInt(b.year, 10)
+	const m = Number.parseInt(b.month, 10)
+	const d = Number.parseInt(b.day, 10)
+	const h = Number.parseInt(b.hour, 10)
+	const min = Number.parseInt(b.minute, 10)
+	const gender = b.gender
+
+	if (!Number.isFinite(y) || y < 1900 || y > 2100) return '出生年份不合法'
+	if (!Number.isFinite(m) || m < 1 || m > 12) return '出生月份不合法'
+	if (!Number.isFinite(d) || d < 1 || d > 31) return '出生日期不合法'
+	if (!Number.isFinite(h) || h < 0 || h > 23) return '出生小时不合法'
+	if (!Number.isFinite(min) || min < 0 || min > 59) return '出生分钟不合法'
+
+	// 校验真实日期（如 2 月 30 日不合法）
+	const dt = new Date(Date.UTC(y, m - 1, d, h, min, 0))
+	if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) {
+		return '出生日期不合法'
+	}
+
+	if (gender !== 'male' && gender !== 'female') return '性别不合法'
+	return null
+}
+
+function birthLabel(b) {
+	const g = b.gender === 'male' ? '男' : b.gender === 'female' ? '女' : '未填'
+	return `${b.year}年${b.month}月${b.day}日 ${String(b.hour).padStart(2,'0')}:${String(b.minute).padStart(2,'0')}（${g}）`
+}
+
+function clampInt(n, min, max, fallback) {
+	const x = typeof n === 'number' ? n : Number(n)
+	if (!Number.isFinite(x)) return fallback
+	const v = Math.round(x)
+	return Math.max(min, Math.min(max, v))
+}
+
+function safeString(v, fallback = '', maxLen) {
+	let s = typeof v === 'string' ? v : (v === undefined || v === null) ? '' : String(v)
+	s = s.trim()
+	if (!s) s = fallback
+	if (typeof maxLen === 'number') s = s.slice(0, maxLen)
+	return s
+}
+
+function normalizeTraits(v, { fallback = [], maxItems = 3, maxLen = 12 } = {}) {
+	let arr = Array.isArray(v) ? v : []
+	arr = arr.map(x => safeString(x, '', maxLen)).filter(Boolean)
+	if (!arr.length) arr = fallback
+	return arr.slice(0, maxItems)
+}
+
+function normalizeFortunePersonal(raw) {
+	if (!raw || typeof raw !== 'object') throw new Error('personal payload invalid')
+	if (raw.score === undefined) throw new Error('personal score missing')
+
+	const five = (raw.fiveElements && typeof raw.fiveElements === 'object') ? raw.fiveElements : null
+	const peach = (raw.peachBlossom && typeof raw.peachBlossom === 'object') ? raw.peachBlossom : null
+	const next = (raw.nextRomance && typeof raw.nextRomance === 'object') ? raw.nextRomance : null
+	const love = (raw.trueLove && typeof raw.trueLove === 'object') ? raw.trueLove : null
+	if (!five || !peach || !next || !love) throw new Error('personal fields missing')
+
+	return {
+		score: clampInt(raw.score, 0, 100, 50),
+		fiveElements: {
+			dayMaster: safeString(five.dayMaster, '日主未解析', 30),
+			distribution: safeString(five.distribution, '五行分布未解析', 40),
+			analysis: safeString(five.analysis, '五行影响未解析', 60)
+		},
+		peachBlossom: {
+			direction: safeString(peach.direction, '桃花方位未解析', 20),
+			timing: safeString(peach.timing, '桃花时机未解析', 24),
+			analysis: safeString(peach.analysis, '桃花运势未解析', 60)
+		},
+		nextRomance: {
+			description: safeString(next.description, '下一个桃花的线索未解析', 60),
+			where: safeString(next.where, '可能场合未解析', 30),
+			when: safeString(next.when, '大概时间未解析', 20),
+			traits: normalizeTraits(next.traits, { fallback: ['更容易心动', '沟通顺畅'], maxItems: 3, maxLen: 12 })
+		},
+		trueLove: {
+			description: safeString(love.description, '正缘整体描述未解析', 70),
+			where: safeString(love.where, '可能在哪里遇见未解析', 30),
+			traits: normalizeTraits(love.traits, { fallback: ['气质温柔', '价值观相合'], maxItems: 3, maxLen: 12 }),
+			howToMeet: safeString(love.howToMeet, '如何把握未解析', 40)
+		},
+		advice: safeString(raw.advice, '整体恋爱建议未解析', 50)
+	}
+}
+
+function normalizeFortuneCouple(raw) {
+	if (!raw || typeof raw !== 'object') throw new Error('couple payload invalid')
+	if (raw.score === undefined) throw new Error('couple score missing')
+
+	if (!raw.fiveElementsMatch || !raw.personalities || !raw.strengths) throw new Error('couple fields missing')
+
+	return {
+		score: clampInt(raw.score, 0, 100, 60),
+		fiveElementsMatch: safeString(raw.fiveElementsMatch, '五行匹配未解析', 70),
+		personalities: safeString(raw.personalities, '性格匹配未解析', 70),
+		strengths: normalizeTraits(raw.strengths, { fallback: ['互相理解'], maxItems: 4, maxLen: 18 }),
+		challenges: normalizeTraits(raw.challenges, { fallback: [], maxItems: 4, maxLen: 18 }),
+		prediction: safeString(raw.prediction, '发展预测未解析', 60),
+		advice: safeString(raw.advice, '相处建议未解析', 50)
+	}
+}
+
+// 个人命理
+app.post('/api/ai/fortune/personal', auth, async (req, res) => {
 	try {
-		const kind = req.body.kind === 'match' ? 'match' : 'daily'
-		if (kind === 'daily') {
-			const day = todayYMD()
-			const cached = await query('SELECT payload FROM ai_fortunes WHERE user_id=$1 AND kind=$2 AND day=$3', [req.user.id, 'daily', day])
-			if (cached.rows.length) return res.json({ ...JSON.parse(cached.rows[0].payload), cached: true })
-			const status = req.user.couple_id ? '恋爱中' : '单身'
-			const nick = req.user.nickname || req.user.username
-			const sys = '你是「爱在浙大」App 里一位温柔又俏皮的恋爱占卜师，为浙江大学的年轻人写今日恋爱运势。语气温暖、积极、有画面感，绝不迷信恐吓。'
-			let data
-			try {
-				data = await chatJSON(sys,
-					`为昵称「${nick}」、当前状态「${status}」的用户写一份今日恋爱运势。返回 JSON：{"score": 0到100的整数, "mood": "今日心情签(不超过16字)", "love": "今日恋爱运势(不超过60字)", "luckyAction": "今天适合做的一件恋爱小事(不超过20字)", "luckyPlace": "浙大校园里的幸运地点(不超过12字)", "advice": "一句暖心建议(不超过30字)"}`,
-					{ maxTokens: 600 })
-			} catch (e) {
-				console.warn('[fortune daily] ai fail, use fallback:', e.message)
-				data = fallbackDailyFortune(req.user, day)
+		const birth = req.body.birth || {}
+		const err = validateBirth(birth)
+		if (err) return res.status(400).json({ error: err })
+		const gender = birth.gender === 'male' ? '男' : birth.gender === 'female' ? '女' : '未填'
+		const day = todayYMD()
+		const nick = req.user.nickname || req.user.username
+
+		// 按天缓存：同一用户当天返回同一份结果，体验更稳定
+		try {
+			const cached = await query(
+				'SELECT payload FROM ai_fortunes WHERE user_id=$1 AND kind=$2 AND day=$3',
+				[req.user.id, 'personal', day]
+			)
+			if (cached.rows.length) {
+				const parsed = JSON.parse(cached.rows[0].payload || '{}')
+				const norm = normalizeFortunePersonal(parsed)
+				return res.json(norm)
 			}
-			const payload = JSON.stringify(data)
-			await query('INSERT INTO ai_fortunes (user_id, kind, day, payload) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id, kind, day) DO UPDATE SET payload=EXCLUDED.payload', [req.user.id, 'daily', day, payload])
-			return res.json({ ...data, cached: false })
-		} else {
-			const nameA = String(req.body.nameA || '').trim().slice(0, 20)
-			const nameB = String(req.body.nameB || '').trim().slice(0, 20)
-			if (!nameA || !nameB) return res.status(400).json({ error: '请填写两个名字' })
-			const sys = '你是趣味恋爱占卜师，做「姓名缘分测算」，风格积极正向、有趣浪漫，仅供娱乐。'
-			let data
-			try {
-				data = await chatJSON(sys,
-					`测算「${nameA}」和「${nameB}」之间的缘分。返回 JSON：{"score": 0到100的整数, "title": "缘分标题(不超过12字)", "analysis": "缘分解读(不超过80字)", "tip": "给他们的小建议(不超过30字)"}`,
-					{ maxTokens: 500 })
-			} catch (e) {
-				console.warn('[fortune match] ai fail, use fallback:', e.message)
-				data = fallbackNameMatch(nameA, nameB)
-			}
-			return res.json(data)
+		} catch (e) {
+			console.warn('[fortune personal] cache fail:', e.message)
 		}
+
+		const sys = `你是一位精通传统八字命理和现代恋爱心理学的资深命理师。你根据生辰八字（年月日时分）推算五行属性、桃花方位、正缘特征。你的语言温暖、具体、有画面感，既有传统命理的底蕴又有现代感，绝不迷信恐吓，始终积极正向。
+
+请严格按以下 JSON 格式返回（不要 markdown 代码块）：
+{
+  "score": 0到100的整数（综合恋爱运势评分）,
+  "fiveElements": {
+    "dayMaster": "日主天干，如「甲木」",
+    "distribution": "五行分布简述，如「木旺、火相、土休」",
+    "analysis": "五行对你性格和感情的影响，不超过60字"
+  },
+  "peachBlossom": {
+    "direction": "桃花方位，如「正南方」",
+    "timing": "桃花出现的时机，如「每年春夏之交」",
+    "analysis": "桃花运势分析，不超过60字"
+  },
+  "nextRomance": {
+    "description": "下一个桃花的性格特征和外貌描述，不超过60字",
+    "where": "可能出现的地点和场合，不超过30字",
+    "when": "大概出现的时间，不超过20字",
+    "traits": ["性格标签1", "性格标签2", "性格标签3"]
+  },
+  "trueLove": {
+    "description": "正缘的整体描述，不超过70字",
+    "where": "可能在哪里遇见，不超过30字",
+    "traits": ["正缘特征1", "特征2", "特征3"],
+    "howToMeet": "如何把握正缘的建议，不超过40字"
+  },
+  "advice": "整体恋爱建议，不超过50字"
+}`
+
+		let lastErr
+		for (let i = 0; i < 2; i++) {
+			try {
+				const data = await chatJSON(
+					sys,
+					`用户「${nick}」，出生时间：${birthLabel(birth)}。请为 TA 推算命理恋爱运势。`,
+					{ maxTokens: 1200 }
+				)
+				const norm = normalizeFortunePersonal(data)
+				await query(
+					`INSERT INTO ai_fortunes (user_id, kind, day, payload)
+					 VALUES ($1,$2,$3,$4)
+					 ON CONFLICT (user_id, kind, day)
+					 DO UPDATE SET payload=EXCLUDED.payload, created_at=now()`,
+					[req.user.id, 'personal', day, JSON.stringify(norm)]
+				)
+				return res.json(norm)
+			} catch (e) {
+				lastErr = e
+				console.warn('[fortune personal] gen fail:', e.message)
+			}
+		}
+		console.error('[fortune personal] final fail:', lastErr?.message)
+		return res.status(503).json({ error: 'AI 暂时不在状态，待会再试试～' })
 	} catch (e) {
-		console.error('[fortune]', e.message)
+		console.error('[fortune personal]', e.message)
 		res.status(503).json({ error: 'AI 暂时不在状态，待会再试试～' })
+	}
+})
+
+// 发起合盘
+app.post('/api/ai/fortune/invite', auth, async (req, res) => {
+	try {
+		const birth = req.body.birth || {}
+		const err = validateBirth(birth)
+		if (err) return res.status(400).json({ error: err })
+		// 清理旧会话
+		await query('DELETE FROM fortune_sessions WHERE creator_id=$1', [req.user.id])
+		let code
+		for (let i = 0; i < 20; i++) {
+			code = genCode()
+			const dup = await query('SELECT code FROM fortune_sessions WHERE code=$1', [code])
+			if (!dup.rows.length) break
+		}
+		if (!code) return res.status(500).json({ error: '生成邀请码失败' })
+		await query('INSERT INTO fortune_sessions (code, creator_id, creator_birth) VALUES ($1,$2,$3)',
+			[code, req.user.id, JSON.stringify(birth)])
+		res.json({ code })
+	} catch (e) {
+		console.error('[fortune invite]', e.message)
+		res.status(500).json({ error: '生成邀请码失败' })
+	}
+})
+
+// 接受合盘邀请
+app.post('/api/ai/fortune/accept', auth, async (req, res) => {
+	try {
+		const code = String(req.body.code || '').trim().toUpperCase()
+		const birth = req.body.birth || {}
+		const matchType = req.body.matchType === 'friend' ? 'friend' : 'love'
+		if (!code) return res.status(400).json({ error: '请输入邀请码' })
+		const err = validateBirth(birth)
+		if (err) return res.status(400).json({ error: err })
+
+		const { rows } = await query('SELECT * FROM fortune_sessions WHERE code=$1', [code])
+		const session = rows[0]
+		if (!session) return res.status(400).json({ error: '邀请码无效或已过期' })
+		if (session.creator_id === req.user.id) return res.status(400).json({ error: '不能和自己合盘哦' })
+		if (session.partner_id && session.partner_id !== req.user.id) {
+			return res.status(400).json({ error: '该邀请码已被其他人使用' })
+		}
+
+		// 如果已有结果，直接返回
+		if (session.result_json) {
+			try {
+				const parsed = JSON.parse(session.result_json || '{}')
+				const norm = normalizeFortuneCouple(parsed)
+				return res.json({ code, matchType: session.match_type, ...norm })
+			} catch (e) {
+				console.warn('[fortune accept] cached result parse fail:', e.message)
+				// 缓存不可用，继续走重新生成流程
+			}
+		}
+
+		const creator = await getUser(session.creator_id)
+		const creatorBirth = JSON.parse(session.creator_birth)
+		const creatorName = (creator && (creator.nickname || creator.username)) || '发起者'
+		const myName = req.user.nickname || req.user.username
+
+		const typeLabel = matchType === 'friend' ? '友谊' : '恋爱'
+		const sys = `你是一位精通八字合盘的资深命理师。你根据两人的生辰八字分析他们的匹配程度。你的分析有传统命理的深度，又温暖亲切、积极正向，仅供娱乐参考。
+
+请严格按以下 JSON 格式返回（不要 markdown 代码块）：
+{
+  "score": 0到100的整数（综合匹配分数）,
+  "fiveElementsMatch": "双方五行生克分析，如「你的甲木得对方癸水滋润，相生相济」，不超过70字",
+  "personalities": "双方性格匹配分析，不超过70字",
+  "strengths": ["互补或契合的点1", "点2", "点3"],
+  "challenges": ["需要注意或磨合的地方1", "地方2"],
+  "prediction": "${typeLabel}关系发展预测，不超过60字",
+  "advice": "给你们${typeLabel}相处的建议，不超过50字"
+}`
+
+		const userPrompt = `请为以下两人进行${typeLabel}合盘测算：
+「${creatorName}」的出生时间：${birthLabel(creatorBirth)}
+「${myName}」的出生时间：${birthLabel(birth)}
+测算类型：${typeLabel}匹配`
+
+		let lastErr
+		for (let i = 0; i < 2; i++) {
+			try {
+				const data = await chatJSON(sys, userPrompt, { maxTokens: 1200 })
+				const norm = normalizeFortuneCouple(data)
+				const resultJson = JSON.stringify(norm)
+
+				await query(
+					'UPDATE fortune_sessions SET partner_id=$1, partner_birth=$2, match_type=$3, result_json=$4 WHERE code=$5',
+					[req.user.id, JSON.stringify(birth), matchType, resultJson, code])
+
+				return res.json({ code, matchType, ...norm })
+			} catch (e) {
+				lastErr = e
+				console.warn('[fortune accept] gen fail:', e.message)
+			}
+		}
+		console.error('[fortune accept] final fail:', lastErr?.message)
+		return res.status(503).json({ error: 'AI 暂时不在状态，待会再试试～' })
+	} catch (e) {
+		console.error('[fortune accept]', e.message)
+		res.status(503).json({ error: 'AI 暂时不在状态，待会再试试～' })
+	}
+})
+
+// 查看合盘状态/结果
+app.get('/api/ai/fortune/session/:code', auth, async (req, res) => {
+	const code = String(req.params.code || '').trim().toUpperCase()
+	if (!code) return res.status(400).json({ error: '缺少邀请码' })
+	const { rows } = await query('SELECT * FROM fortune_sessions WHERE code=$1', [code])
+	const session = rows[0]
+	if (!session) return res.status(400).json({ error: '会话不存在' })
+	const isCreator = session.creator_id === req.user.id
+	const isPartner = session.partner_id === req.user.id
+	if (!isCreator && !isPartner) return res.status(403).json({ error: '无权查看' })
+
+	if (!session.result_json) {
+		return res.json({
+			code: session.code,
+			ready: false,
+			creatorName: (await getUser(session.creator_id))?.nickname || '发起者',
+			partnerJoined: !!session.partner_id,
+			matchType: null
+		})
+	}
+
+	try {
+		const parsed = JSON.parse(session.result_json || '{}')
+		const norm = normalizeFortuneCouple(parsed)
+		return res.json({
+			code: session.code,
+			ready: true,
+			matchType: session.match_type,
+			...norm
+		})
+	} catch (e) {
+		console.error('[fortune session] parse fail:', e.message)
+		return res.status(503).json({ error: '结果生成失败，请稍后再试～' })
 	}
 })
 

@@ -172,6 +172,18 @@ async function migrate() {
 			created_at TIMESTAMPTZ DEFAULT now()
 		)`)
 	await query(`CREATE INDEX IF NOT EXISTS memories_ck ON memories (couple_id, mem_date)`)
+	// AI 算命·合盘：邀请制双方生辰合盘
+	await query(`
+		CREATE TABLE IF NOT EXISTS fortune_sessions (
+			code TEXT PRIMARY KEY,
+			creator_id INTEGER NOT NULL,
+			creator_birth TEXT NOT NULL,
+			partner_id INTEGER,
+			partner_birth TEXT,
+			match_type TEXT,
+			result_json TEXT,
+			created_at TIMESTAMPTZ DEFAULT now()
+		)`)
 	// 搭小屋：情侣共享的房间 + 爱心币经济
 	await query(`
 		CREATE TABLE IF NOT EXISTS houses (

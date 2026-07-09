@@ -14,7 +14,7 @@
 
 			<view class="field">
 				<text class="label">账号</text>
-				<input class="input" v-model="username" placeholder="用户名(字母/数字)" placeholder-class="ph" />
+				<input class="input" v-model="username" placeholder="用户名(2-20个字符)" placeholder-class="ph" />
 			</view>
 			<view class="field" v-if="mode === 'register'">
 				<text class="label">昵称</text>
@@ -47,7 +47,6 @@ export default {
 		}
 	},
 	onShow() {
-		// 已登录直接进首页
 		if (getToken()) {
 			uni.reLaunch({ url: '/pages/home/home' })
 		}
@@ -56,8 +55,8 @@ export default {
 		async submit() {
 			const username = (this.username || '').trim()
 			const password = this.password || ''
-			if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-				return uni.showToast({ title: '账号需3-20位字母/数字', icon: 'none' })
+			if (username.length < 2 || username.length > 20) {
+				return uni.showToast({ title: '账号需2-20个字符', icon: 'none' })
 			}
 			if (password.length < 6) {
 				return uni.showToast({ title: '密码至少6位', icon: 'none' })

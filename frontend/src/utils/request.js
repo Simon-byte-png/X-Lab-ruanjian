@@ -12,8 +12,10 @@ function normalizeApiBase(base) {
 
 function apiBase() {
 	// #ifdef H5
-	// 以当前页面地址为基准解析出 .../api/，无论部署在根目录还是子路径都成立
-	return new URL('api/', window.location.href).href
+	// 优先使用环境变量；否则使用相对路径 /api/，由 Vite proxy 转发到后端
+	const envBase = import.meta.env?.VITE_API_BASE_URL
+	if (envBase) return normalizeApiBase(envBase)
+	return '/api/'
 	// #endif
 	// #ifndef H5
 	// 小程序/App 正式包请通过 VITE_API_BASE_URL 注入已备案的 https 后端地址。
@@ -33,7 +35,7 @@ export function clearToken() {
 	uni.removeStorageSync(TOKEN_KEY)
 }
 
-export function request(path, { method = 'GET', data } = {}) {
+export function request(path, { method = 'GET', data, timeout = 60000 } = {}) {
 	const url = apiBase() + path.replace(/^\//, '')
 	const header = { 'Content-Type': 'application/json' }
 	const token = getToken()
@@ -44,6 +46,7 @@ export function request(path, { method = 'GET', data } = {}) {
 			method,
 			data,
 			header,
+			timeout,
 			success: (res) => {
 				const body = res.data || {}
 				if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -55,7 +58,17 @@ export function request(path, { method = 'GET', data } = {}) {
 					reject(new Error(body.error || ('请求失败(' + res.statusCode + ')')))
 				}
 			},
-			fail: (err) => reject(new Error(err.errMsg || '网络错误'))
+			fail: (err) => {
+				const msg = err.errMsg || '网络错误'
+				// 常见超时/连接失败给出更友好的中文提示
+				if (/timeout/i.test(msg)) {
+					reject(new Error('连接后端超时，请确认后端已启动且能访问网络'))
+				} else if (/fail/i.test(msg)) {
+					reject(new Error('无法连接后端服务，请检查后端是否在运行'))
+				} else {
+					reject(new Error(msg))
+				}
+			}
 		})
 	})
 }
@@ -72,8 +85,11 @@ export const api = {
 	countdowns: () => request('countdowns'),
 	addCountdown: (data) => request('countdowns', { method: 'POST', data }),
 	delCountdown: (id) => request('countdowns/' + id, { method: 'DELETE' }),
-	// AI 算命
-	fortune: (data) => request('ai/fortune', { method: 'POST', data }),
+	// AI 算命（生辰八字）
+	fortunePersonal: (data) => request('ai/fortune/personal', { method: 'POST', data }),
+	fortuneInvite: (data) => request('ai/fortune/invite', { method: 'POST', data }),
+	fortuneAccept: (data) => request('ai/fortune/accept', { method: 'POST', data }),
+	fortuneSession: (code) => request('ai/fortune/session/' + code),
 	// 匹配度测试
 	quizList: () => request('quiz/list'),
 	quiz: (id) => request('quiz/' + id),
