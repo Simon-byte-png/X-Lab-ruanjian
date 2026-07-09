@@ -143,7 +143,7 @@ export default {
 </script>
 
 <style>
-.page { padding: 20rpx 32rpx 60rpx; }
+.page { padding: 20rpx 32rpx calc(180rpx + env(safe-area-inset-bottom)); }
 .header { display: flex; justify-content: space-between; align-items: center; padding: 20rpx 4rpx 12rpx; }
 .hi { font-size: 44rpx; font-weight: 800; color: var(--ink); letter-spacing: 0.5rpx; }
 .sub { display: block; font-size: 25rpx; color: var(--ink-3); margin-top: 10rpx; }
