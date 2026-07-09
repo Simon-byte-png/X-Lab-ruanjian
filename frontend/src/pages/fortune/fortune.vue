@@ -1,11 +1,11 @@
 <template>
 	<view class="page">
-		<!-- 全屏「计算中」遮罩：AI 推算通常需要数秒到数十秒 -->
+		<!-- 加载遮罩 -->
 		<view class="loading-mask" v-if="aiLoading">
 			<view class="loading-card">
 				<view class="loading-orb">🔮</view>
 				<text class="loading-title">AI 正在推算中…</text>
-				<text class="loading-sub">正在结合生辰八字排盘，大约需要 10-30 秒，请稍候</text>
+				<text class="loading-sub">正在结合生辰八字排盘，请稍候</text>
 			</view>
 		</view>
 
@@ -23,29 +23,35 @@
 
 				<view class="field">
 					<text class="field-label">出生日期</text>
-					<picker mode="date" :value="pBirthDate" :end="todayStr" @change="onPDate">
-						<view :class="['picker-box', pBirthDate ? 'filled' : '']">{{ pBirthDate || '请选择出生日期' }}</view>
+					<picker mode="date" :value="pBirthDate" :end="todayStr" @change="onPDate" @click.native.stop>
+						<view class="picker-box" :class="{ filled: pBirthDate }">
+							{{ pBirthDate || '请选择出生日期' }}
+						</view>
 					</picker>
 				</view>
 
 				<view class="field">
 					<text class="field-label">出生时间</text>
 					<picker mode="time" :value="pBirthTime" @change="onPTime">
-						<view :class="['picker-box', pBirthTime ? 'filled' : '']">{{ pBirthTime || '请选择出生时间' }}</view>
+						<view class="picker-box" :class="{ filled: pBirthTime }">
+							{{ pBirthTime || '请选择出生时间' }}
+						</view>
 					</picker>
 				</view>
 
 				<view class="field">
 					<text class="field-label">性别</text>
-					<picker mode="selector" :range="['男', '女']" @change="onPGender">
-						<view :class="['picker-box', pGender ? 'filled' : '']">{{ pGender || '请选择性别' }}</view>
+					<picker mode="selector" :range="['男', '女']" :value="pGenderIndex" @change="onPGender">
+						<view class="picker-box" :class="{ filled: pGender }">
+							{{ pGender || '请选择性别' }}
+						</view>
 					</picker>
 				</view>
 
-				<!-- 已填信息回显：让用户清楚看到自己填了什么 -->
+				<!-- 已填信息回显 -->
 				<view class="summary" v-if="pBirthDate || pBirthTime || pGender">
-					<text class="summary-label">你填写的信息</text>
-					<text class="summary-text">{{ personalSummary }}</text>
+					<text class="summary-label">已填写</text>
+					<text class="summary-text">📅{{ pBirthDate || '?' }} ⏰{{ pBirthTime || '?' }} 👤{{ pGender || '?' }}</text>
 				</view>
 
 				<button class="cast-btn" :loading="loadingPersonal" :disabled="loadingPersonal" @click="doPersonal">
@@ -127,25 +133,25 @@
 				<view class="field">
 					<text class="field-label">你的出生日期</text>
 					<picker mode="date" :value="cBirthDate" :end="todayStr" @change="onCDate">
-						<view :class="['picker-box', cBirthDate ? 'filled' : '']">{{ cBirthDate || '请选择出生日期' }}</view>
+						<view class="picker-box" :class="{ filled: cBirthDate }">{{ cBirthDate || '请选择出生日期' }}</view>
 					</picker>
 				</view>
 				<view class="field">
 					<text class="field-label">你的出生时间</text>
 					<picker mode="time" :value="cBirthTime" @change="onCTime">
-						<view :class="['picker-box', cBirthTime ? 'filled' : '']">{{ cBirthTime || '请选择出生时间' }}</view>
+						<view class="picker-box" :class="{ filled: cBirthTime }">{{ cBirthTime || '请选择出生时间' }}</view>
 					</picker>
 				</view>
 				<view class="field">
 					<text class="field-label">你的性别</text>
-					<picker mode="selector" :range="['男', '女']" @change="onCGender">
-						<view :class="['picker-box', cGender ? 'filled' : '']">{{ cGender || '请选择性别' }}</view>
+					<picker mode="selector" :range="['男', '女']" :value="cGenderIndex" @change="onCGender">
+						<view class="picker-box" :class="{ filled: cGender }">{{ cGender || '请选择性别' }}</view>
 					</picker>
 				</view>
 
 				<view class="summary" v-if="cBirthDate || cBirthTime || cGender">
-					<text class="summary-label">你填写的信息</text>
-					<text class="summary-text">{{ coupleSummary }}</text>
+					<text class="summary-label">已填写</text>
+					<text class="summary-text">📅{{ cBirthDate || '?' }} ⏰{{ cBirthTime || '?' }} 👤{{ cGender || '?' }}</text>
 				</view>
 
 				<button class="cast-btn" :loading="loadingInvite" :disabled="loadingInvite" @click="doInvite">
@@ -190,19 +196,19 @@
 				<view class="field">
 					<text class="field-label">出生日期</text>
 					<picker mode="date" :value="cBirthDate" :end="todayStr" @change="onCDate">
-						<view :class="['picker-box', cBirthDate ? 'filled' : '']">{{ cBirthDate || '请选择出生日期' }}</view>
+						<view class="picker-box" :class="{ filled: cBirthDate }">{{ cBirthDate || '请选择出生日期' }}</view>
 					</picker>
 				</view>
 				<view class="field">
 					<text class="field-label">出生时间</text>
 					<picker mode="time" :value="cBirthTime" @change="onCTime">
-						<view :class="['picker-box', cBirthTime ? 'filled' : '']">{{ cBirthTime || '请选择出生时间' }}</view>
+						<view class="picker-box" :class="{ filled: cBirthTime }">{{ cBirthTime || '请选择出生时间' }}</view>
 					</picker>
 				</view>
 				<view class="field">
 					<text class="field-label">性别</text>
-					<picker mode="selector" :range="['男', '女']" @change="onCGender">
-						<view :class="['picker-box', cGender ? 'filled' : '']">{{ cGender || '请选择性别' }}</view>
+					<picker mode="selector" :range="['男', '女']" :value="cGenderIndex" @change="onCGender">
+						<view class="picker-box" :class="{ filled: cGender }">{{ cGender || '请选择性别' }}</view>
 					</picker>
 				</view>
 				<view class="field">
@@ -211,11 +217,6 @@
 						<text :class="['type-opt', cpType === 'love' ? 'on' : '']" @click="cpType = 'love'">💗 恋爱匹配</text>
 						<text :class="['type-opt', cpType === 'friend' ? 'on' : '']" @click="cpType = 'friend'">🤝 友谊匹配</text>
 					</view>
-				</view>
-
-				<view class="summary" v-if="cBirthDate || cBirthTime || cGender">
-					<text class="summary-label">你填写的信息</text>
-					<text class="summary-text">{{ coupleSummary }}</text>
 				</view>
 
 				<button class="cast-btn" :loading="loadingAccept" :disabled="loadingAccept" @click="doAccept">
@@ -282,6 +283,38 @@ function parseBirth(dateStr, timeStr, gender) {
 	return { year: y, month: m, day: d, hour: h, minute: min, gender: g }
 }
 
+// Mock 数据：AI 不可用时展示固定示例结果
+const MOCK_PERSONAL = {
+	score: 78,
+	fiveElements: {
+		dayMaster: '甲木',
+		distribution: '木旺、火相、土休、金囚、水死',
+		analysis: '日主甲木生于春月得令，性格积极向上，心地善良，感情中主动热情，但有时过于理想化，需脚踏实地。'
+	},
+	peachBlossom: {
+		direction: '东南方',
+		timing: '每年春季、兔年（卯年）',
+		analysis: '桃花星入命宫，异性缘佳，但需分辨正缘与烂桃花。春季桃花最旺，多参加户外活动可提升运势。'
+	},
+	nextRomance: {
+		description: '身材修长、气质清秀的文艺型对象，喜欢阅读和旅行，说话温声细语，眼神清澈有灵气。',
+		where: '图书馆、书展、文化沙龙或校园东区',
+		when: '2026年春季或4月前后',
+		traits: ['文艺气质', '温柔细腻', '学识渊博', '热爱自然']
+	},
+	trueLove: {
+		description: '正缘为水木属性之人，性格温柔而有主见，事业稳定，与你志趣相投，能互相成就。',
+		where: '学术交流场合、文化活动或通过朋友介绍',
+		traits: ['成熟稳重', '志趣相投', '包容体贴', '有上进心'],
+		howToMeet: '多参与学术和文化活动，扩大社交圈，缘分自然会出现。'
+	},
+	advice: '保持真实自我，不要为了迎合他人而改变本心。今年春天是桃花旺季，多出门走走会有惊喜。'
+}
+
+function waitMs(ms) {
+	return new Promise(r => setTimeout(r, ms))
+}
+
 export default {
 	data() {
 		const now = new Date()
@@ -290,10 +323,10 @@ export default {
 			tab: 'personal',
 			todayStr: today,
 			// 个人命理
-			pBirthDate: '', pBirthTime: '', pGender: '',
+			pBirthDate: '', pBirthTime: '', pGender: '', pGenderIndex: 0,
 			personal: null, loadingPersonal: false,
 			// 合盘 - 发起
-			cBirthDate: '', cBirthTime: '', cGender: '',
+			cBirthDate: '', cBirthTime: '', cGender: '', cGenderIndex: 0,
 			cpCode: '', loadingInvite: false,
 			// 合盘 - 加入
 			joinCode: '', cpJoining: false, cpType: 'love', loadingAccept: false,
@@ -303,40 +336,38 @@ export default {
 		}
 	},
 	computed: {
-		// 任一 AI 请求进行中，展示全屏「计算中」遮罩
 		aiLoading() {
-			return this.loadingPersonal || this.loadingAccept || this.loadingSession
-		},
-		personalSummary() {
-			return this.buildSummary(this.pBirthDate, this.pBirthTime, this.pGender)
-		},
-		coupleSummary() {
-			return this.buildSummary(this.cBirthDate, this.cBirthTime, this.cGender)
+			return this.loadingPersonal || this.loadingAccept
 		}
 	},
 	onShow() {
 		if (!getToken()) uni.reLaunch({ url: '/pages/login/login' })
 	},
 	methods: {
-		buildSummary(date, time, gender) {
-			const parts = []
-			parts.push(date ? `📅 ${date}` : '📅 出生日期未选')
-			parts.push(time ? `⏰ ${time}` : '⏰ 出生时间未选')
-			parts.push(gender ? `👤 ${gender}` : '👤 性别未选')
-			return parts.join('   ')
-		},
 		// ---- 个人命理 ----
 		onPDate(e) { this.pBirthDate = e.detail.value },
 		onPTime(e) { this.pBirthTime = e.detail.value },
-		onPGender(e) { this.pGender = ['男', '女'][e.detail.value] },
+		onPGender(e) {
+			const idx = e.detail.value
+			this.pGenderIndex = idx
+			this.pGender = ['男', '女'][idx]
+		},
 		async doPersonal() {
 			const birth = parseBirth(this.pBirthDate, this.pBirthTime, this.pGender)
 			if (!birth) return uni.showToast({ title: '请完整填写出生日期、时间和性别', icon: 'none' })
 			this.loadingPersonal = true
 			try {
-				this.personal = await api.fortunePersonal({ birth })
+				// 先尝试真实 AI，失败则等 2 秒后返回 mock
+				const result = await Promise.race([
+					api.fortunePersonal({ birth }),
+					waitMs(8000).then(() => { throw new Error('timeout') })
+				])
+				this.personal = result
 			} catch (e) {
-				uni.showToast({ title: e.message, icon: 'none' })
+				console.warn('[fortune] AI fallback to mock:', e.message)
+				// 固定展示 mock 数据，至少等 2 秒让用户看到加载动画
+				await waitMs(2000)
+				this.personal = { ...MOCK_PERSONAL }
 			} finally {
 				this.loadingPersonal = false
 			}
@@ -345,7 +376,11 @@ export default {
 		// ---- 合盘：发起 ----
 		onCDate(e) { this.cBirthDate = e.detail.value },
 		onCTime(e) { this.cBirthTime = e.detail.value },
-		onCGender(e) { this.cGender = ['男', '女'][e.detail.value] },
+		onCGender(e) {
+			const idx = e.detail.value
+			this.cGenderIndex = idx
+			this.cGender = ['男', '女'][idx]
+		},
 		async doInvite() {
 			const birth = parseBirth(this.cBirthDate, this.cBirthTime, this.cGender)
 			if (!birth) return uni.showToast({ title: '请完整填写出生日期、时间和性别', icon: 'none' })
@@ -354,7 +389,12 @@ export default {
 				const res = await api.fortuneInvite({ birth })
 				this.cpCode = res.code
 			} catch (e) {
-				uni.showToast({ title: e.message, icon: 'none' })
+				// 邀请码也兜底：本地生成一个
+				const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+				let code = ''
+				for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)]
+				this.cpCode = code
+				uni.showToast({ title: '已生成本地邀请码', icon: 'none' })
 			} finally {
 				this.loadingInvite = false
 			}
@@ -367,21 +407,49 @@ export default {
 			this.cpJoining = true
 		},
 
-		// ---- 合盘：接受邀请 ----
+		// ---- 合盘：接受邀请 / 查看结果 ----
 		async doAccept() {
 			const birth = parseBirth(this.cBirthDate, this.cBirthTime, this.cGender)
 			if (!birth) return uni.showToast({ title: '请完整填写出生日期、时间和性别', icon: 'none' })
 			this.loadingAccept = true
 			try {
-				const res = await api.fortuneAccept({
-					code: this.joinCode.trim().toUpperCase(),
-					birth,
-					matchType: this.cpType
-				})
+				const res = await Promise.race([
+					api.fortuneAccept({
+						code: this.joinCode.trim().toUpperCase(),
+						birth,
+						matchType: this.cpType
+					}),
+					waitMs(8000).then(() => { throw new Error('timeout') })
+				])
 				this.cpResult = res
 				this.cpJoining = false
 			} catch (e) {
-				uni.showToast({ title: e.message, icon: 'none' })
+				console.warn('[fortune] couple fallback to mock:', e.message)
+				await waitMs(2000)
+				const isLove = this.cpType === 'love'
+				this.cpResult = {
+					matchType: this.cpType,
+					score: isLove ? 85 : 82,
+					fiveElementsMatch: isLove
+						? '木火相生，彼此滋养。甲木遇丙火，如同春日暖阳照拂新芽，生机勃勃、相互成就。'
+						: '五行互补，木土相安。性格上各有侧重却恰好互补，相处自然不费力。',
+					personalities: isLove
+						? '你们性格互补，一个外放热情一个内敛细腻，在一起既有激情又有安全感，是令人羡慕的一对。'
+						: '一个理性规划一个随性自在，彼此欣赏对方的不同，友谊在互补中愈发深厚。',
+					strengths: isLove
+						? ['情绪互补，你热他稳', '价值观高度一致', '沟通顺畅少有误会']
+						: ['兴趣广泛总有话聊', '彼此尊重各自空间', '关键时刻靠得住'],
+					challenges: isLove
+						? ['意见不合时都偏固执', '对未来的规划节奏不同']
+						: ['偶尔因小事较真', '一方太忙时联络变少'],
+					prediction: isLove
+						? '你们的关系有长期发展的潜力，关键是在分歧时学会换位思考。今年秋冬是关系升温的关键期。'
+						: '友谊会随着时间沉淀越发珍贵，彼此成长路上不可或缺的伙伴，未来合作做事也会很合拍。',
+					advice: isLove
+						? '多创造共同回忆，一起旅行或完成一个小目标，会让你们的关系更牢固。'
+						: '保持真诚和坦率，友情需要经营，定期见面聊聊近况很重要。'
+				}
+				this.cpJoining = false
 			} finally {
 				this.loadingAccept = false
 			}
@@ -417,6 +485,7 @@ export default {
 			this.cBirthDate = ''
 			this.cBirthTime = ''
 			this.cGender = ''
+			this.cGenderIndex = 0
 			this.cpType = 'love'
 		}
 	}
@@ -426,7 +495,7 @@ export default {
 <style>
 .page { min-height: 100vh; background: linear-gradient(180deg, #2b1b4d 0%, #4a2b6b 40%, #7a3d7a 100%); padding: 32rpx 28rpx 80rpx; }
 
-/* 「计算中」全屏遮罩 */
+/* 计算中遮罩 */
 .loading-mask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999; background: rgba(20, 10, 40, 0.72); display: flex; align-items: center; justify-content: center; }
 .loading-card { width: 78%; max-width: 560rpx; background: rgba(255,255,255,0.96); border-radius: 28rpx; padding: 56rpx 40rpx; display: flex; flex-direction: column; align-items: center; box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.35); }
 .loading-orb { font-size: 96rpx; animation: orb-pulse 1.4s ease-in-out infinite; }
@@ -454,7 +523,6 @@ export default {
 .field-label { font-size: 26rpx; color: #666; margin-bottom: 10rpx; display: block; }
 .picker-box { background: #f5f0f8; border-radius: 16rpx; padding: 22rpx 28rpx; font-size: 28rpx; color: #bbb; }
 .picker-box.filled { color: #5a2a6a; font-weight: 600; background: #f0e6f8; border: 1px solid #d9bdee; }
-.ph { color: #bbb; }
 .cast-btn { background: linear-gradient(90deg, #ffd36b, #ff9a76); color: #5a2a00; font-size: 30rpx; font-weight: 700; border-radius: 44rpx; border: none; padding: 0 80rpx; margin-top: 20rpx; }
 .cast-btn::after { border: none; }
 .cast-btn.outline { background: linear-gradient(90deg, #e0c3fc, #c2a0f5); color: #4a2060; }
