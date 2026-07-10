@@ -177,7 +177,14 @@
 			<view class="form-card" v-if="cpCode && !cpJoining && !cpResult">
 				<text class="form-title">📋 你的邀请码</text>
 				<text class="code-display">{{ cpCode }}</text>
-				<text class="form-desc">把邀请码发给对方，TA 在这里输入后就能看合盘结果</text>
+				<text class="form-desc">把邀请码或链接发给对方，TA 打开填生辰就能看合盘结果</text>
+
+				<view class="invite-link" v-if="inviteLink">
+					<text class="il-label">合盘邀请链接</text>
+					<text class="il-text" selectable>{{ inviteLink }}</text>
+				</view>
+				<button class="cast-btn" @click="copyInviteLink">{{ inviteLink ? '复制邀请链接' : '复制邀请码' }}</button>
+
 				<view class="waiting-hint">
 					<text class="dot-anim">⏳</text>
 					<text>等待对方加入...</text>
@@ -315,6 +322,16 @@ function waitMs(ms) {
 	return new Promise(r => setTimeout(r, ms))
 }
 
+function buildFortuneLink(code) {
+	// #ifdef H5
+	const base = window.location.href.split('#')[0]
+	return `${base}#/pages/fortune/fortune?join=${code}`
+	// #endif
+	// #ifndef H5
+	return ''
+	// #endif
+}
+
 export default {
 	data() {
 		const now = new Date()
@@ -332,16 +349,40 @@ export default {
 			joinCode: '', cpJoining: false, cpType: 'love', loadingAccept: false,
 			// 合盘 - 结果
 			cpResult: null,
-			loadingSession: false
+			loadingSession: false,
+			// 通过链接进入的待处理邀请码
+			pendingJoinFromLink: false
 		}
 	},
 	computed: {
 		aiLoading() {
 			return this.loadingPersonal || this.loadingAccept
+		},
+		inviteLink() {
+			return this.cpCode ? buildFortuneLink(this.cpCode) : ''
+		}
+	},
+	onLoad(query) {
+		if (query && query.join) {
+			const code = String(query.join).trim().toUpperCase()
+			this.tab = 'couple'
+			this.joinCode = code
+			this.pendingJoinFromLink = true
+			uni.setStorageSync('pendingJoin', { page: 'fortune', code })
 		}
 	},
 	onShow() {
-		if (!getToken()) uni.reLaunch({ url: '/pages/login/login' })
+		if (!getToken()) {
+			uni.reLaunch({ url: '/pages/login/login' })
+			return
+		}
+		// 通过分享链接进入：直接跳到「填写生辰加入合盘」
+		if (this.pendingJoinFromLink && this.joinCode) {
+			this.pendingJoinFromLink = false
+			uni.removeStorageSync('pendingJoin')
+			this.tab = 'couple'
+			this.cpJoining = true
+		}
 	},
 	methods: {
 		// ---- 个人命理 ----
@@ -398,6 +439,16 @@ export default {
 			} finally {
 				this.loadingInvite = false
 			}
+		},
+
+		// ---- 合盘：复制邀请链接/邀请码 ----
+		copyInviteLink() {
+			const data = this.inviteLink || this.cpCode
+			if (!data) return
+			uni.setClipboardData({
+				data,
+				success: () => uni.showToast({ title: this.inviteLink ? '邀请链接已复制' : '邀请码已复制', icon: 'none' })
+			})
 		},
 
 		// ---- 合盘：输入邀请码 ----
@@ -532,6 +583,9 @@ export default {
 /* 邀请码 */
 .code-display { font-size: 72rpx; font-weight: 800; color: #7a3d7a; text-align: center; letter-spacing: 16rpx; margin: 24rpx 0; }
 .code-input { width: 100%; height: 88rpx; background: #f5f0f8; border-radius: 16rpx; padding: 0 28rpx; font-size: 32rpx; box-sizing: border-box; text-align: center; letter-spacing: 8rpx; text-transform: uppercase; }
+.invite-link { width: 100%; box-sizing: border-box; background: #f5f0f8; border-radius: 16rpx; padding: 20rpx 24rpx; margin-top: 8rpx; }
+.il-label { display: block; font-size: 22rpx; color: #a97fc0; margin-bottom: 8rpx; }
+.il-text { display: block; font-size: 22rpx; color: #7a3d7a; word-break: break-all; line-height: 1.5; }
 .waiting-hint { display: flex; align-items: center; justify-content: center; gap: 12rpx; margin-top: 24rpx; color: #999; font-size: 26rpx; }
 .dot-anim { font-size: 36rpx; }
 .divider { display: flex; align-items: center; justify-content: center; margin: 36rpx 0 28rpx; }

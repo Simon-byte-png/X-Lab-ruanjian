@@ -97,6 +97,21 @@ async function migrate() {
 			created_at TIMESTAMPTZ DEFAULT now()
 		)`)
 	await query(`CREATE UNIQUE INDEX IF NOT EXISTS quiz_answers_uk ON quiz_answers (couple_id, quiz_id, user_id)`)
+	// 匹配度测试·分享版：无需绑定，发起人先答题生成邀请码/链接，任何登录用户凭码作答后即出结果
+	await query(`
+		CREATE TABLE IF NOT EXISTS quiz_sessions (
+			code TEXT PRIMARY KEY,
+			quiz_id TEXT NOT NULL,
+			creator_id INTEGER NOT NULL,
+			creator_name TEXT,
+			creator_answers TEXT NOT NULL,
+			partner_id INTEGER,
+			partner_name TEXT,
+			partner_answers TEXT,
+			result_json TEXT,
+			created_at TIMESTAMPTZ DEFAULT now()
+		)`)
+	await query(`CREATE INDEX IF NOT EXISTS quiz_sessions_creator ON quiz_sessions (creator_id, quiz_id)`)
 	// 匹配度结果缓存（双方答完后生成一次，答案变化则失效）
 	await query(`
 		CREATE TABLE IF NOT EXISTS quiz_results (

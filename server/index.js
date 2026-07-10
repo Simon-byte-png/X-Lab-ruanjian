@@ -668,6 +668,132 @@ app.get('/api/quiz/:id/result', auth, async (req, res) => {
 	}
 })
 
+// ---------- 匹配度测试·分享版（无需绑定情侣） ----------
+// 计算两份答案的默契度并交给 AI 生成解读（视角无关，双方看到相同解读）
+async function analyzeQuizPair(quiz, aAns, aName, bAns, bName) {
+	let matched = 0
+	quiz.questions.forEach((_, i) => { if (aAns[i] === bAns[i]) matched++ })
+	const total = quiz.questions.length
+	const score = Math.round(40 + 60 * matched / total)
+	const detail = quiz.questions.map((q, i) =>
+		`题:${q.q}\n${aName}选:${q.options[aAns[i]]}\n${bName}选:${q.options[bAns[i]]}`).join('\n\n')
+	let ai = { summary: '', highlights: [], suggestion: '' }
+	try {
+		ai = await chatJSON(
+			'你是温柔风趣的关系分析师，根据两个人的答题结果，写一段积极、具体、有温度的默契解读。他们不一定是情侣，可能是朋友、暧昧对象或只是想测测默契的两个人，用词请中性友好。',
+			`「${aName}」和「${bName}」完成了「${quiz.title}」，共 ${total} 题，其中 ${matched} 题选择一致。以下是逐题作答：\n\n${detail}\n\n请返回 JSON：{"summary": "整体默契解读(不超过100字)", "highlights": ["2到3条你们很合拍或值得注意的点，每条不超过25字"], "suggestion": "给两人的一条相处小建议(不超过40字)"}`,
+			{ maxTokens: 700 })
+	} catch (e) {
+		ai = { summary: `你们在 ${total} 道题里有 ${matched} 题想法一致，默契值 ${score} 分！继续多聊聊彼此的想法吧～`, highlights: [], suggestion: '找时间聊聊那些答案不同的题，会更懂对方哦。' }
+	}
+	return {
+		score, matched, total,
+		summary: ai.summary || '',
+		highlights: Array.isArray(ai.highlights) ? ai.highlights.slice(0, 3) : [],
+		suggestion: ai.suggestion || ''
+	}
+}
+
+// 发起人先答题 → 生成邀请码（可拼成链接分享）
+app.post('/api/quiz/:id/share', auth, async (req, res) => {
+	const quiz = getQuiz(req.params.id)
+	if (!quiz) return res.status(404).json({ error: '题库不存在' })
+	const answers = Array.isArray(req.body.answers) ? req.body.answers : []
+	if (answers.length !== quiz.questions.length) return res.status(400).json({ error: '请把题目答完' })
+	const clean = answers.map(a => parseInt(a, 10))
+	if (clean.some((a, i) => !(a >= 0 && a < quiz.questions[i].options.length))) return res.status(400).json({ error: '答案不合法' })
+	try {
+		// 清理该用户此题库下还没人作答的旧邀请，避免堆积
+		await query('DELETE FROM quiz_sessions WHERE creator_id=$1 AND quiz_id=$2 AND result_json IS NULL', [req.user.id, quiz.id])
+		let code
+		for (let i = 0; i < 20; i++) {
+			code = genCode()
+			const dup = await query('SELECT code FROM quiz_sessions WHERE code=$1', [code])
+			if (!dup.rows.length) break
+		}
+		if (!code) return res.status(500).json({ error: '生成邀请码失败' })
+		const creatorName = req.user.nickname || req.user.username
+		await query('INSERT INTO quiz_sessions (code, quiz_id, creator_id, creator_name, creator_answers) VALUES ($1,$2,$3,$4,$5)',
+			[code, quiz.id, req.user.id, creatorName, JSON.stringify(clean)])
+		res.json({ code, quizId: quiz.id })
+	} catch (e) {
+		console.error('[quiz share create]', e.message)
+		res.status(500).json({ error: '生成分享失败，稍后再试' })
+	}
+})
+
+// 查看分享测试的状态/结果（发起人轮询、加入者进入前预览都走这里）
+app.get('/api/quiz/share/:code', auth, async (req, res) => {
+	const code = String(req.params.code || '').trim().toUpperCase()
+	if (!code) return res.status(400).json({ error: '缺少邀请码' })
+	const { rows } = await query('SELECT * FROM quiz_sessions WHERE code=$1', [code])
+	const s = rows[0]
+	if (!s) return res.status(404).json({ error: '链接无效或已过期' })
+	const quiz = getQuiz(s.quiz_id)
+	const isCreator = s.creator_id === req.user.id
+	const isPartner = s.partner_id === req.user.id
+	const base = {
+		code: s.code,
+		quizId: s.quiz_id,
+		quizTitle: quiz ? quiz.title : '匹配度测试',
+		quizDesc: quiz ? quiz.desc : '',
+		creatorName: s.creator_name || '发起者',
+		isCreator,
+		isPartner,
+		joined: !!s.partner_id
+	}
+	if (s.result_json) {
+		try {
+			const r = JSON.parse(s.result_json)
+			const meName = isCreator ? s.creator_name : (isPartner ? s.partner_name : s.creator_name)
+			const taName = isCreator ? s.partner_name : (isPartner ? s.creator_name : s.partner_name)
+			return res.json({ ...base, ready: true, ...r, meName: meName || '你', taName: taName || '对方' })
+		} catch (e) {
+			console.error('[quiz share get] parse fail:', e.message)
+		}
+	}
+	res.json({ ...base, ready: false })
+})
+
+// 加入者凭邀请码作答 → 立即出结果
+app.post('/api/quiz/share/:code/answer', auth, async (req, res) => {
+	const code = String(req.params.code || '').trim().toUpperCase()
+	if (!code) return res.status(400).json({ error: '缺少邀请码' })
+	const { rows } = await query('SELECT * FROM quiz_sessions WHERE code=$1', [code])
+	const s = rows[0]
+	if (!s) return res.status(404).json({ error: '链接无效或已过期' })
+	const quiz = getQuiz(s.quiz_id)
+	if (!quiz) return res.status(404).json({ error: '题库不存在' })
+	if (s.creator_id === req.user.id) return res.status(400).json({ error: '这是你发起的测试，等对方来答就好啦～' })
+	// 已经出过结果
+	if (s.result_json) {
+		if (s.partner_id === req.user.id) {
+			try {
+				const r = JSON.parse(s.result_json)
+				return res.json({ ready: true, ...r, meName: s.partner_name || '你', taName: s.creator_name || '对方' })
+			} catch (e) { /* 落到重新生成 */ }
+		} else {
+			return res.status(400).json({ error: '这个链接已经有人答过啦，让 TA 再发个新的给你吧～' })
+		}
+	}
+	if (s.partner_id && s.partner_id !== req.user.id) return res.status(400).json({ error: '这个链接已经有人在答了' })
+	const answers = Array.isArray(req.body.answers) ? req.body.answers : []
+	if (answers.length !== quiz.questions.length) return res.status(400).json({ error: '请把题目答完' })
+	const clean = answers.map(a => parseInt(a, 10))
+	if (clean.some((a, i) => !(a >= 0 && a < quiz.questions[i].options.length))) return res.status(400).json({ error: '答案不合法' })
+	try {
+		const creatorAns = JSON.parse(s.creator_answers)
+		const partnerName = req.user.nickname || req.user.username
+		const analysis = await analyzeQuizPair(quiz, creatorAns, s.creator_name || '发起者', clean, partnerName)
+		await query('UPDATE quiz_sessions SET partner_id=$1, partner_name=$2, partner_answers=$3, result_json=$4 WHERE code=$5',
+			[req.user.id, partnerName, JSON.stringify(clean), JSON.stringify(analysis), code])
+		res.json({ ready: true, ...analysis, meName: partnerName, taName: s.creator_name || '对方' })
+	} catch (e) {
+		console.error('[quiz share answer]', e.message)
+		res.status(500).json({ error: '生成结果失败，稍后再试' })
+	}
+})
+
 // ---------- 每日任务 ----------
 async function partnerNames(user) {
 	let me = user.nickname || user.username

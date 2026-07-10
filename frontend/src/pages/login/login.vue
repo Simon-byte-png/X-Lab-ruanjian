@@ -36,6 +36,16 @@
 <script>
 import { api, setToken, getToken } from '@/utils/request.js'
 
+// 登录后：若之前点了分享链接，回到目标页继续加入；否则回首页
+function afterLoginRedirect() {
+	const p = uni.getStorageSync('pendingJoin')
+	if (p && p.page && p.code) {
+		uni.reLaunch({ url: `/pages/${p.page}/${p.page}?join=${p.code}` })
+		return
+	}
+	uni.reLaunch({ url: '/pages/home/home' })
+}
+
 export default {
 	data() {
 		return {
@@ -48,7 +58,7 @@ export default {
 	},
 	onShow() {
 		if (getToken()) {
-			uni.reLaunch({ url: '/pages/home/home' })
+			afterLoginRedirect()
 		}
 	},
 	methods: {
@@ -70,7 +80,7 @@ export default {
 					? await api.register(payload)
 					: await api.login(payload)
 				setToken(res.token)
-				uni.reLaunch({ url: '/pages/home/home' })
+				afterLoginRedirect()
 			} catch (e) {
 				uni.showToast({ title: e.message || '操作失败', icon: 'none' })
 			} finally {

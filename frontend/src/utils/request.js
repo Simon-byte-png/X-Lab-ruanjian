@@ -95,6 +95,10 @@ export const api = {
 	quiz: (id) => request('quiz/' + id),
 	quizAnswer: (id, data) => request('quiz/' + id + '/answer', { method: 'POST', data }),
 	quizResult: (id) => request('quiz/' + id + '/result'),
+	// 匹配度测试·分享版（无需绑定）
+	quizShareCreate: (id, data) => request('quiz/' + id + '/share', { method: 'POST', data }),
+	quizShareGet: (code) => request('quiz/share/' + code),
+	quizShareAnswer: (code, data) => request('quiz/share/' + code + '/answer', { method: 'POST', data }),
 	// 每日任务
 	tasksToday: () => request('tasks/today'),
 	toggleTask: (id) => request('tasks/' + id + '/toggle', { method: 'POST' }),
